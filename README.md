@@ -1,73 +1,140 @@
-# Hactoberfest 2023
-<img src=https://hacktoberfest.digitalocean.com/_nuxt/img/logo-hacktoberfest-full.f42e3b1.svg />
-A beginner-friendly project to help you in open-source contribution. Made specifically for contribution in HACKTOBERFEST 2023! Hello World Programs and Algorithms! Please leave a star to support this project! 
-![](https://hacktoberfest.digitalocean.com/_nuxt/img/logo-hacktoberfest-full.f42e3b1.svg)
+# update-supply-chain-information
 
-# This All programs For beginner 
-Enjoy All
-Hacktoberfest has a simple and plain moto.
+A Django app focused on collecting data about the UK's most valuable supply chains. This app is primarily a form in which other government departments can submit updates and provide information about the supply chains they manage.
 
-# Beginner-Hacktoberfest
-Need Your first pr for hacktoberfest 2k23 ? come on in 
+The app uses the standard Django MVC architecture, alongside some Django REST framework end-points. These end-points will allow for the future development of a pipeline that will feed the app's data into [Data Workspace](https://data.trade.gov.uk/). This data will later serve a series of visualisations which will be hosted on Data Workspace.
 
----
+## Running the app and its tests
 
-# ❓ What's Hacktoberfest 2023?
+Docker is required to run this project and the project use docker compose extensively.
 
-Hacktoberfest is the easiest way to get into open source! Hacktoberfest is a month long festival of open source code presented by [Digital Ocean](https://www.digitalocean.com/) and [DEV](https://www.dev.to/) this year in 2023.
+The project uses a `Makefile` to make running commands easier. `make` commands need to be run at the same directory level as the Makefile.
 
-During the entire month of October 2022, all you have to do is contribute to any open source projects and open at least 4 pull requests. Yes, any project and any kind of contributions. It can be a be a bug fix, improvement, or even a documentation change! And win a T-Shirt and awesome stickers.
+### Setting up environment variables:
+- Environment variables can be found in the `.env.example`
+- Copy these to a `.env` file in the root folder
+- The `AUTHBROKER_CLIENT_ID` and `AUTHBROKER_CLIENT_SECRET` values needed for staff SSO can be found in [passman](https://passman.ci.uktrade.digital/secret/61f0a3bf-33f3-427e-8ade-cdee0c637031/)
 
-If you’ve never contributed to open source before, this is the perfect time to get started because Hacktoberfest provides a large list of available contribution opportunities (and yes, there are always plenty for beginners too).
+### Setting up static files
+The project uses [webpack](https://webpack.js.org/) to build static files, to setup:
+- Install node version 18.x
+- Run `npm install` to install all node modules, including webpack and the govuk-frontend npm package
+- Run `npm run dev` - webpack will then bundle all static files in `assets` and create 'bundles' in `assets/webpack_bundles`. When making changes to static files, e.g. updating `application.scss`, webpack will recompile the files when edited and create a new bundle. You can quit this process when it's complete if you are not going to be working on things that would need recompiling.
 
----
+### Styles
+The project mainly uses styles from the [govuk-frontend](https://github.com/alphagov/govuk-frontend) npm package. Examples of how to use these styles can be found in components on the [GOVUK design system](https://design-system.service.gov.uk/components/).
 
-# 👕 Why Should I Contribute?
+Where it is not possible to use a govuk style, the [moj-frontend](https://github.com/ministryofjustice/moj-frontend) library (an extension of govuk-frontend) has been used, and any custom styles added to `assets/application.scss`, with classes prefixed with `.app-`.
 
-Hacktoberfest has a simple and plain moto.
+### To run the app for the first time:
+- run `make build`
+- run `make first-use`
+- run `make up`
+- You must access the app on http://localhost:8000 as this is the URL which is configured as the 'redirect URL' for our authbroker credentials in staff SSO
+- Note: Being connected to the VPN can lead to http://localhost:8000 to fail to load. Disconnect to test locally.
 
-> Support open source and earn a limited edition T-shirt!
+### To just load fixture data:
+- Run `make load-data` to load fixture data into the database.
 
-So, yes! You can win a T-Shirt and few awesome stickers to attach on your laptop. On plus side, you will get into beautiful world of open source and get the international exposure.  
-**Wait there's more!**
+### To run tests:
+- To run the suite of python unit tests, written in pytest, run `make test`
+
+## Load testing
+
+Load testing is carried out using preferred tool [Locust](https://locust.io/). Main focus of these tests are to find *max concurrent users*
+that can be supported by the web app. Hence the test scenario is written to achieve just that.
+
+Test specific configs are saved at *.locust.conf* while *load_test/locustfile.py* define the scenario.
+
+### To start load test
+
+- Start *dev* or *testserver* in one terminal
+- Start locust tool in another terminal with below command
+
+```python
+locust --config .locust.conf
+```
+
+Refer to the tool's docs for more info on the flags used.
+
+## Adding Black pre-commit hook
+
+- Generate your pre-commit hooks by running `pre-commit install`.
+- When committing your files, there will be output from Black saying your file has failed, which kickstarts the autocorrector.
+- Stage the files again with the Black corrections, and commit.
+
+## Integrations
+
+### Staff SSO
+This project uses DIT's Staff SSO as it's authentication broker, which the app communicates with via [The Django Staff SSO client](https://github.com/uktrade/django-staff-sso-client). This provides a global session around DIT's projects, meaning they all share a centralised authentication. In this app, we extend the authentication slightly, in order to obtain and record the government department that a user should be assigned to. This is done using the domain from the email address in their Staff SSO profile.
+
+### Activity Stream, Data Flow, and Data Workspace
+
+#### Activity Stream
+
+The `activity_stream` app provides a feed of the project's data in [Activity Streams 2.0](https://www.w3.org/TR/activitystreams-core/) format, for consumption by the DIT's Activity Stream.
+Activity Stream then makes the data available in its Elasticsearch instance.
+
+As Activity Stream uses Hawk authentication, the following environment variables must be set to support this:
+
+* `HAWK_UNIQUE_ID` - A value used internally to identify the credentials used to access the feed.
+  This can be an informative name, as it appears as part of the name autogenerated for Activity Stream Elasticsearch's internal indices.
+* `HAWK_SECRET_ACCESS_KEY` - A shared secret used by Activity Stream to encrypt its requests, and by the `activity_stream` app to authenticate those requests.
+A suitable value for this can be generated the same way as a Django Secret Key using `django.utils.crypto.get_random_string()` with a `length` of 64.
+
+The same values, along with several other variables, must then be [provided to Activity Stream in Vault](https://vault.ci.uktrade.digital/ui/vault/secrets/dit%2Factivity-stream/list/activity-stream/),
+to configure its access to the feed. The `nn` in the environment variable names below denotes a numeric value 
+which is internal to Activity Stream; when configuring such values, 
+simply use the next highest number after the values used by already-configured feeds.
+
+* `FEEDS__nn__ACCESS_KEY_ID`: `usci_activitystream`
+* `FEEDS__nn__UNIQUE_ID`: `{the value of HAWK_UNIQUE_ID above}`
+* `FEEDS__nn__SECRET_ACCESS_KEY`: `{the value of HAWK_SECRET_ACCESS_KEY above}`
+* `FEEDS__nn__SEED`: `https://{domain}/api/activity-stream/`
+* `FEEDS__nn__TYPE`: `activity_stream`
+
+For more information about configuring integration with Activity Stream, see [the Activity Stream documentation](https://readme.trade.gov.uk/docs/services/activity-stream.html).
+
+For additional support in configuring integration, including being given access to their Vault, contact the Data Integrations team on Slack via [the #di-pipelines channel](https://ditdigitalteam.slack.com/archives/CUT4MMBQD).
+
+#### Data Flow
+
+Once the project data has been made available in Activity Stream's Elasticsearch, it can be extracted
+by the DIT's Data Flow application which stores it in Data Workspace. Once in Data Workspace, it can be used by 
+the Supply Chains Visualisations application.
+
+This integration is achieved by the creation of multiple DAGs (Python classes based on Airflow DAGs),
+with each DAG corresponding to one of the models serialised by `activity_stream`,
+in accordance with the general process described in [How to get data into a table in Data Workspace](https://readme.trade.gov.uk/docs/howtos/data-workspace-pipeline.html).
+
+The DAGS implemented for this project follow the pattern set by other DAGs in the Data Flow application that consume Activity Stream data,
+which can be found [in Data Flow's GitHub repository](https://github.com/uktrade/data-flow/blob/master/dataflow/dags/activity_stream_pipelines.py).
+Each DAG stores the data it retrieves in a Data Workspace table corresponding to the type of the model retrieved.
+
+It is expected that a complete DAG run, resulting in the data from this project becoming available in Data Workspace,
+will happen daily. Should more or less frequent updates be required, this must be configured by the Data Integrations team. 
+
+#### Data Workspace
+
+Details of deploying an application to use this project's data after it has travelled into Data Workspace via the above route
+can be found in [How to use Data Workspace datasets in your application](https://readme.trade.gov.uk/docs/howtos/data-workspace-datasets.html).
+
+Note that Data Workspace presents data tables in a flat form - it does not use Foreign Key relationships.
+As this project uses UUIDs as primary keys, it is still possible to follow relationships within Data Workspace,
+but this would have to be implemented at the application level.
 
 
----
+## Links to Analyses
 
-# 👍 This is Awesome! How Can I Contribute?
+The data gathered by this service are used to create a number of dashboards in Data Workspace.
+These are linked to from the "Analysis" section of the home page of the service.
 
-It's very easy. You don't need to be an expert in coding and programming. Here are the steps you need to follow to create your -(maybe)- EXAMPLE first pull request within few minutes.
-1. **Star this repository.**
-2. **Navigate To index.html or main.css do so crazy contribution file**
-3. **Edit the file and insert the line of text in the specified location in the format as given in comment .**
-4. **Now click on Propose button.**
-5. **Create a new pull request.**
-6. **Wait for your Pull Request to be reviewed and merged!**
-7. **Enjoy and welcome to Hacktoberfest 2023 and Keep Contributing :)**
+### Adding a Link
 
-> You Can Upload Coded Projects In the Codes Directory 
-
-
----
-## Code Of Conduct
-**Examples of behavior that contributes to creating a positive environment :**
-- Using welcoming and inclusive language
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the community
-- Being respectful of differing viewpoints and experiences
-
-
-
-**Examples of unacceptable behavior by participants include:**
-- Trolling, insulting/derogatory comments, and personal or political attacks
-- Public or private harassment
-- Publishing others' private information, such as a physical or electronic address, without explicit permission
----
-
-## 🎯Objectives
-**The Main Objectives of this Repositry is to help People for their Contribution in Hacktoberfest 2022**
-
-<!-- # :handshake: Our Contributors
-<a href="https://github.com/hctnm2/Beginner-Hacktoberfest/graphs/contributors">
-<!--   <img src="https://contrib.rocks/image?repo=hctnm2/Beginner-Hacktoberfest" /> -->
-<!-- </a> --> 
+* Add the link to Vault under a suitable name; this makes it available in the deployment environment.
+* In `config/settings/base.py` add the link as a setting, obtaining the value from the environment.
+* In `supply_chains.templatetags.supply_chain_tags` add a template tag that renders the content of the setting.
+* In `supply_chains/templates/supply_chains/index.html` copy and paste one of the existing visualisation link blocks,
+updating the title, description, and template tag used for rendering the link's `href` attribute appropriately.
+* Update `env.example` to include the new value.
+* For local development, add the new value in your `.env` file.

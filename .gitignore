@@ -1,0 +1,40 @@
+__pycache__/
+*.py[cod]
+# virtual env
+env
+# environment variables
+.env
+
+node_modules
+npm-debug.log*
+update_supply_chain_information/assets/webpack_bundles
+static
+webpack-stats.json
+.idea
+
+backend.pid
+
+# Folders and file auto-generated when cypress is run
+cypress/videos/
+cypress/screenshots/
+
+# VS code
+settings.json
+
+# pytest coverage
+*coverage*
+
+# OS x
+.DS_Store
+
+# IDE
+.idea
+
+# webpack
+assets/webpack_bundles/*
+
+# PII and secrets cache
+.pii-secret-hook
+
+# Local testing
+cypress/
